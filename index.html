@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe AI Pro</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --grid-color: #333333;
+            --x-color: #ff4d4d; /* Red */
+            --o-color: #00d2ff; /* Blue */
+            --line-color: #ffd700; /* Gold for the winning line */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            position: relative;
+        }
+
+        .status {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            font-weight: bold;
+            height: 3rem;
+            color: #333;
+        }
+
+        .board-container {
+            position: relative;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 120px);
+            grid-template-rows: repeat(3, 120px);
+            gap: 10px;
+            background-color: var(--grid-color);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .cell {
+            width: 120px;
+            height: 120px;
+            background-color: var(--bg-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4rem;
+            font-weight: 900;
+            cursor: pointer;
+        }
+
+        .cell.x { color: var(--x-color); }
+        .cell.o { color: var(--o-color); }
+
+        #line-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: 2px solid var(--grid-color);
+            border-radius: 5px;
+            background-color: transparent;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--grid-color);
+            color: white;
+        }
+
+        #restart-btn {
+            display: none;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            font-size: 1.2rem;
+        }
+
+        /* Signature at bottom right */
+        .footer {
+            position: fixed;
+            bottom: 15px;
+            right: 20px;
+            font-size: 0.9rem;
+            color: #888;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="status" class="status">Choose Mode</div>
+
+    <div class="board-container">
+        <canvas id="line-canvas" width="380" height="380"></canvas>
+        <div class="board" id="board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="mode-buttons">
+            <button id="btn-chicken" onclick="startGame('chicken')">Scared Chicken Mode</button>
+            <button id="btn-difficult" onclick="startGame('difficult')">Difficult Mode</button>
+        </div>
+        <button id="restart-btn" onclick="resetGame()">RESTART GAME</button>
+    </div>
+
+    <div class="footer">made by San Sebastian IRL</div>
+
+    <script>
+        const cells = document.querySelectorAll('.cell');
+        const statusText = document.getElementById('status');
+        const restartBtn = document.getElementById('restart-btn');
+        const canvas = document.getElementById('line-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let board = ["", "", "", "", "", "", "", "", ""];
+        let gameActive = false;
+        let currentMode = "";
+        const HUMAN = "O";
+        const AI = "X";
+
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]
+        ];
+
+        function startGame(mode) {
+            currentMode = mode;
+            resetGame();
+        }
+
+        function resetGame() {
+            board = ["", "", "", "", "", "", "", "", ""];
+            gameActive = true;
+            restartBtn.style.display = "none";
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            cells.forEach(cell => {
+                cell.innerText = "";
+                cell.classList.remove('x', 'o');
+            });
+
+            if (currentMode === 'difficult') {
+                statusText.innerText = "AI Thinking...";
+                setTimeout(aiMove, 500);
+            } else {
+                statusText.innerText = "Your Turn (O)";
+            }
+        }
+
+        function handleCellClick(e) {
+            const index = e.target.getAttribute('data-index');
+            if (board[index] !== "" || !gameActive) return;
+
+            makeMove(index, HUMAN);
+
+            if (gameActive) {
+                statusText.innerText = "AI Thinking...";
+                setTimeout(aiMove, 600);
+            }
+        }
+
+        function makeMove(index, player) {
+            board[index] = player;
+            cells[index].innerText = player;
+            cells[index].classList.add(player.toLowerCase());
+            checkResult();
+        }
+
+        function aiMove() {
+            if (!gameActive) return;
+
+            let move;
+            if (currentMode === 'chicken') {
+                let availableMoves = board.map((val, idx) => val === "" ? idx : null).filter(val => val !== null);
+                move = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+            } else {
+                move = getBestMove();
+            }
+
+            makeMove(move, AI);
+            if (gameActive) statusText.innerText = "Your Turn (O)";
+        }
+
+        function getBestMove() {
+            let bestScore = -Infinity;
+            let move;
+            for (let i = 0; i < 9; i++) {
+                if (board[i] === "") {
+                    board[i] = AI;
+                    let score = minimax(board, 0, false);
+                    board[i] = "";
+                    if (score > bestScore) {
+                        bestScore = score;
+                        move = i;
+                    }
+                }
+            }
+            return move;
+        }
+
+        function minimax(currBoard, depth, isMaximizing) {
+            let winData = checkWinnerData();
+            if (winData && winData.winner === AI) return 10;
+            if (winData && winData.winner === HUMAN) return -10;
+            if (!currBoard.includes("")) return 0;
+
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (currBoard[i] === "") {
+                        currBoard[i] = AI;
+                        let score = minimax(currBoard, depth + 1, false);
+                        currBoard[i] = "";
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (currBoard[i] === "") {
+                        currBoard[i] = HUMAN;
+                        let score = minimax(currBoard, depth + 1, true);
+                        currBoard[i] = "";
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
+            }
+        }
+
+        function checkWinnerData() {
+            for (let condition of winningConditions) {
+                const [a, b, c] = condition;
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    return { winner: board[a], line: condition };
+                }
+            }
+            return null;
+        }
+
+        function checkResult() {
+            const result = checkWinnerData();
+            if (result) {
+                gameActive = false;
+                drawWinningLine(result.line);
+                statusText.innerText = result.winner === AI ? "AI WINS!" : "YOU WIN!";
+                restartBtn.style.display = "block";
+            } else if (!board.includes("")) {
+                gameActive = false;
+                statusText.innerText = "DRAW!";
+                restartBtn.style.display = "block";
+            }
+        }
+
+        function drawWinningLine(line) {
+            const positions = line.map(idx => {
+                const cell = cells[idx];
+                return {
+                    x: cell.offsetLeft + cell.offsetWidth / 2,
+                    y: cell.offsetTop + cell.offsetHeight / 2
+                };
+            });
+
+            ctx.beginPath();
+            ctx.moveTo(positions[0].x, positions[0].y);
+            ctx.lineTo(positions[2].x, positions[2].y);
+            ctx.strokeStyle = "rgba(255, 215, 0, 0.7)";
+            ctx.lineWidth = 10;
+            ctx.lineCap = "round";
+            ctx.stroke();
+        }
+
+        cells.forEach(cell => cell.addEventListener('click', handleCellClick));
+    </script>
+</body>
+</html>
